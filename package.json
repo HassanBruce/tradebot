@@ -1,0 +1,19 @@
+{
+  "name": "tradebot",
+  "version": "1.0.0",
+  "description": "Small, honest Binance spot trading bot: testnet first, trend-following, fee-aware",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node --no-warnings src/server.js",
+    "backtest": "node --no-warnings scripts/backtest.js",
+    "check": "node --no-warnings scripts/check.js",
+    "test": "node --no-warnings --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

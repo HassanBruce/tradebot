@@ -1,0 +1,13 @@
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATA_DIR: /app/data
+    volumes:
+      - ./data:/app/data
+    # Dashboard only on the VPS itself (not open to the internet).
+    # See README for opening it on your phone/laptop.
+    ports:
+      - "127.0.0.1:3100:3100"
