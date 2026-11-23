@@ -1,13 +1,12 @@
+# Runs once and exits. The server's cron starts it:
+#   every hour:   docker compose run --rm tradebot run
+#   every morning: docker compose run --rm tradebot report
+name: tradebot
 services:
-  bot:
+  tradebot:
     build: .
-    restart: unless-stopped
     env_file: .env
     environment:
       DATA_DIR: /app/data
     volumes:
       - ./data:/app/data
-    # Dashboard only on the VPS itself (not open to the internet).
-    # See README for opening it on your phone/laptop.
-    ports:
-      - "127.0.0.1:3100:3100"

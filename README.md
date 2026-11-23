@@ -1,89 +1,40 @@
-# tradebot — Binance spot bot (testnet pehle)
+# Trade bot (paper trading)
 
-Chhota, imaandar trading bot. Testnet (fake paisa) pe default chalta hai. Har faisle ki wajah Roman Urdu mein "Bot ki diary" mein likhta hai, taake tum saath saath trading bhi seekho.
+AI ki madad se crypto **paper trading**: nakli paise, asli Binance prices. Koi exchange account, API key ya asli order nahi.
+Maqsad ye dekhna hai ke AI ke faisle waqai munafa dete hain ya nahi, asli paisa lagane se **pehle**.
 
-## Strategy (seedhi zabaan mein)
-- **1 ghante ki candles**, sirf **BTC/USDT**, sirf **khareed ke bechna** (no leverage, no shorting, no futures).
-- **Kab khareedta hai:** jab chhota trend (EMA 20) bade trend (EMA 50) ko upar se cross kare, price lambe trend (EMA 200) se upar ho, aur market "bohot garam" na ho (RSI < 70).
-- **Kab bechta hai:**
-  - **Stop-loss:** price 2× ATR neeche gir jaye (nuksan chhota rakho)
-  - **Take-profit:** price 3× ATR upar chala jaye (munafa pakka karo)
-  - Ya trend ulta ho jaye (EMA 20 neeche cross kare)
-- **Jaan boojh ke kam trades:** har buy+sell pe ~0.2% fee lagti hai, zyada trades = zyada fees.
+## Kaise kaam karta hai
 
-> Is strategy mein koi jaadu nahi. Ye "trend ke saath chalo, nuksan chhota rakho" wala classic tareeqa hai. Kai din aur kabhi hafta bhar koi trade nahi hogi, ye normal hai.
+1. **Har ghante** bot khuli trade ka stop-loss aur target check karta hai (15-minute candles, dono ek candle mein lagein to nuqsaan wala maana jata hai).
+2. **Har 4 ghante** (agar koi trade khuli nahi) wo Binance ke 25 sab se zyada trade hone wale coins dekhta hai, 4-ghante ki candles par:
+   - sirf woh coins jo uptrend mein hain (price EMA50 ke upar, EMA20 > EMA50), RSI 45-70, aur bohot zyada bhaage hue nahi;
+   - agar Bitcoin kamzor hai (EMA50 ke neeche aur RSI < 40) to koi nayi trade nahi.
+3. Is chhoti list mein se **Gemini** zyada se zyada ek coin chunta hai, ya kuch nahi.
+4. **Code ke pakke rules** (AI inhein tod nahi sakta):
+   - ek waqt mein 1 trade (Rs 1500 mein Binance ka $5 minimum order ek hi trade ki jagah deta hai);
+   - stop-loss 4% se door ho to trade nahi;
+   - din mein 3 trades, ya 3% nuqsaan ke baad us din band;
+   - 5 din mein target/stop na lage to trade band;
+   - har khareed/farokht par 0.1% fee aur 0.05% slippage.
+5. Har trade par email, aur roz subah hisaab: kitna bana, aur agar sirf Bitcoin rakh lete to kitna hota.
 
-## Safety
-- `MODE=testnet` default hai. Live ke liye **do switch** chahiye: `MODE=live` aur `LIVE_TRADING_CONFIRM=yes`.
-- `BUDGET_USDT`: account mein jitna bhi paisa ho, bot isse zyada use nahi karega.
-- `MAX_DAILY_LOSS_USDT`: din ka itna nuksan hua to us din aur trade nahi.
-- Dashboard pe **Pause** aur **Close position now** buttons hain.
-- Live API key banate waqt: sirf **Spot Trading** enable karo. **Withdrawals kabhi enable mat karna.** Key ko apne VPS ki IP pe restrict karo.
+## Server par
 
-## 1. Backtest (sab se pehle, 2 minute, koi key nahi chahiye)
-Pichle 1 saal ke asli prices pe yehi strategy chala ke dekho, fees samait:
 ```bash
-npm install
-npm run backtest -- --days 365 --budget 25
-```
-Isme trades, win rate, mahina-ba-mahina profit/loss aur "buy & hold" se muqabla dikhega. Yaad rahe: purane data pe acha nateeja future ki guarantee nahi.
-
-## 2. Testnet key
-1. **testnet.binance.vision** → "Log In with GitHub"
-2. **Generate HMAC_SHA256 Key** → key aur secret copy karo (secret sirf ek dafa dikhta hai)
-3. Testnet account mein fake USDT pehle se hota hai.
-
-## 3. VPS pe chalana
-```bash
-cd tradebot
-cp .env.example .env && nano .env      # keys + ADMIN_PASSWORD
-docker compose run --rm bot node --no-warnings scripts/check.js   # connection check, koi order nahi
-docker compose up -d
-docker compose logs -f                 # live log (Ctrl+C se bahar, bot chalta rahega)
+cp .env.example .env          # Gemini key + Gmail App Password bharein
+docker compose build
+docker compose run --rm tradebot run          # ek dafa chalayen
+docker compose run --rm tradebot status
+docker compose run --rm tradebot test-email
 ```
 
-## 4. Dashboard dekhna
-Dashboard sirf VPS ke andar khula hai (security ke liye). Do tareeqe:
+Cron (`/etc/cron.d/tradebot`):
 
-**Laptop se (SSH tunnel):**
-```bash
-ssh -L 3100:localhost:3100 root@YOUR_VPS_IP
 ```
-Phir browser mein `http://localhost:3100` kholo (user kuch bhi, password = ADMIN_PASSWORD).
-
-**Phone se (WhatsApp bot wale Caddy ke zariye, HTTPS):**
-1. DNS mein `trade.yourdomain.com` → VPS IP
-2. `wabot/docker-compose.yml` mein `caddy` service ke neeche add karo:
-   ```yaml
-       extra_hosts:
-         - "host.docker.internal:host-gateway"
-   ```
-   aur tradebot ki `docker-compose.yml` mein port ko `"172.17.0.1:3100:3100"` kar do.
-3. `wabot/Caddyfile` mein add karo:
-   ```
-   trade.yourdomain.com {
-   	reverse_proxy host.docker.internal:3100
-   }
-   ```
-4. `cd wabot && docker compose up -d`
-
-## 5. 2 hafte baad
-Dashboard pe dekho: total P&L, win rate, fees. Phir faisla tumhara.
-
-Live jana ho to:
-1. Binance pe real Spot API key banao (Spot Trading only, withdrawals OFF, IP restricted)
-2. `.env`: `MODE=live`, `LIVE_TRADING_CONFIRM=yes`, nayi key, `BUDGET_USDT=25`
-3. `data/` folder ka naam badal do (testnet history alag rahe), phir `docker compose up -d --build`
-
-## Files
+5 * * * *  deploy cd /var/www/tradebot/src && docker compose run --rm tradebot run >> data/cron.log 2>&1
+0 8 * * *  deploy cd /var/www/tradebot/src && docker compose run --rm tradebot report >> data/cron.log 2>&1
 ```
-src/strategy.js       entry/exit rules + har faisle ki wajah
-src/indicators.js     EMA, RSI, ATR
-src/engine.js         har minute: stop/target check, naye candle pe strategy, orders
-src/binance.js        signed Binance REST client, lot-size rounding, fees
-src/db.js             SQLite: trades, diary
-src/server.js         dashboard
-src/backtest-core.js  wohi strategy purane data pe
-scripts/backtest.js   npm run backtest
-scripts/check.js      keys/balance check (no orders)
-```
+
+Data `data/paper.db` (SQLite) mein rehta hai. Nayi shuruaat ke liye ye file delete kar dein.
+
+> Ye financial advice nahi. Crypto bohot tezi se upar neeche hota hai. Asli paisa sirf itna lagayein jo doob jaye to farq na pare.
