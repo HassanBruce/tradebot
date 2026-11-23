@@ -17,6 +17,13 @@ def _num(name, default):
 DATA_DIR = Path(_env("DATA_DIR", "data"))
 TIMEZONE = _env("TIMEZONE", "Asia/Karachi")
 
+# What to trade: "crypto" (spot, long only, top coins) or "gold" (PAXG price, futures-style: long or short, leverage)
+MODE = _env("MODE", "crypto")
+GOLD_SYMBOL = _env("GOLD_SYMBOL", "PAXGUSDT")      # PAXG tracks the price of one troy ounce of gold
+LEVERAGE = _num("LEVERAGE", 1)                     # 20 = a 1% move changes the position by 20%
+RISK_PCT = _num("RISK_PCT", 100)                   # max loss per trade as % of the account (at the stop-loss)
+TRADE_WEEKENDS = _env("TRADE_WEEKENDS", "1") == "1"  # gold futures (PMEX) are closed on weekends
+
 # Paper account
 START_PKR = _num("START_PKR", 1500)          # starting balance in rupees
 FEE_PCT = _num("FEE_PCT", 0.1)               # Binance spot fee per side

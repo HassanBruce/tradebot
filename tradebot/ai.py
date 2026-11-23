@@ -30,6 +30,8 @@ def ask_json(prompt):
 
 
 def decide(candidates, btc, account):
+    if config.MODE == "gold":
+        return decide_gold(candidates[0], account)
     prompt = f"""You are a careful crypto swing trader managing a very small paper account (spot, long only).
 Your job is to protect capital first. Choosing NO trade is often the best answer.
 
@@ -55,5 +57,32 @@ Return JSON:
     allowed = {c["symbol"] for c in candidates}
     if t and (t.get("symbol") not in allowed or float(t.get("confidence", 0)) < config.MIN_CONFIDENCE):
         out["why_not"] = f"AI suggestion {t.get('symbol')} rejected (not on the shortlist or confidence below {config.MIN_CONFIDENCE})"
+        out["trade"] = None
+    return out
+
+
+def decide_gold(g, account):
+    prompt = f"""You are a disciplined gold day trader. The account trades gold futures-style with {config.LEVERAGE:.0f}x leverage,
+long or short, one position at a time. Each trade risks about {config.RISK_PCT:.0f}% of the account at the stop-loss,
+so only take setups with a clear edge. Choosing NO trade is often right.
+
+Account: {json.dumps(account)}
+Gold ({config.INTERVAL} candles, price in USD per ounce, via PAXG): {json.dumps(g)}
+
+Rules:
+- side "long" only with the 4h trend up or a clear bounce from support; side "short" only with the 4h trend down or a clear rejection.
+- Avoid trading against the 4h trend unless RSI is extreme (below 25 or above 75).
+- stop_atr is the stop-loss distance in {config.INTERVAL} ATRs (1.0 to 2.5). target_r is the profit target as a multiple of that risk (1.5 to 3).
+- Never invent news or data that is not given above.
+
+Return JSON:
+{{"market_view": "2 short sentences on gold right now",
+  "trade": null or {{"symbol": "{config.GOLD_SYMBOL}", "side": "long" or "short", "confidence": 0-100, "stop_atr": 1.5, "target_r": 2, "reason": "2-3 sentences"}},
+  "why_not": "if no trade, one sentence why"}}"""
+    out, model = ask_json(prompt)
+    out["model"] = model
+    t = out.get("trade")
+    if t and (t.get("side") not in ("long", "short") or float(t.get("confidence", 0)) < config.MIN_CONFIDENCE):
+        out["why_not"] = f"AI suggestion rejected (side {t.get('side')}, confidence {t.get('confidence')}; minimum {config.MIN_CONFIDENCE})"
         out["trade"] = None
     return out

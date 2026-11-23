@@ -59,6 +59,19 @@ def market_regime():
     return b, risk_off
 
 
+def gold_candidate():
+    """One instrument, both directions: the 1h picture plus the 4h trend for context."""
+    s = config.GOLD_SYMBOL
+    d = describe(s, config.INTERVAL)
+    if not d:
+        return []
+    h4 = describe(s, "4h")
+    d["trend_4h"] = "up" if h4 and h4["above_ema50"] and h4["ema20_over_50"] else (
+        "down" if h4 and not h4["above_ema50"] and not h4["ema20_over_50"] else "sideways")
+    d["rsi_4h"] = h4["rsi"] if h4 else None
+    return [d]
+
+
 def shortlist(exclude=()):
     """Coins in an uptrend that are not already overheated. The AI picks from these, or nothing."""
     out = []

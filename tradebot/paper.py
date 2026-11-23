@@ -11,7 +11,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS trades (
   id INTEGER PRIMARY KEY, symbol TEXT, opened REAL, entry REAL, qty REAL, cost REAL,
-  stop REAL, target REAL, confidence REAL, reason TEXT,
+  stop REAL, target REAL, confidence REAL, reason TEXT, side TEXT DEFAULT 'long', notional REAL,
   closed REAL, exit REAL, proceeds REAL, pnl REAL, exit_reason TEXT);
 CREATE TABLE IF NOT EXISTS decisions (id INTEGER PRIMARY KEY, ts REAL, data TEXT);
 """
@@ -43,19 +43,36 @@ def init(con):
     rate = market.usd_pkr()
     put(con, "cash", config.START_PKR / rate)
     put(con, "start", dict(ts=time.time(), pkr=config.START_PKR, usdt=config.START_PKR / rate, rate=rate,
-                           btc=market.price("BTCUSDT")))
+                           btc=market.price("BTCUSDT"), bench_symbol=bench_symbol(),
+                           bench=market.price(bench_symbol())))
     return True
+
+
+def bench_symbol():
+    """What we compare against: simply holding the asset, without the bot."""
+    return config.GOLD_SYMBOL if config.MODE == "gold" else "BTCUSDT"
 
 
 def open_trades(con):
     return con.execute("SELECT * FROM trades WHERE closed IS NULL").fetchall()
 
 
+def _pnl(t, price):
+    """Profit before the closing fee. qty * price move, in the trade's direction."""
+    move = price - t["entry"] if (t["side"] or "long") == "long" else t["entry"] - price
+    return t["qty"] * move
+
+
+def value(t, price):
+    """What the position is worth if closed at this price: margin + profit - closing fee (never below zero)."""
+    return max(0.0, t["cost"] + _pnl(t, price) - t["qty"] * price * config.FEE_PCT / 100)
+
+
 def equity(con, prices=None):
     total = get(con, "cash", 0.0)
     for t in open_trades(con):
         p = (prices or {}).get(t["symbol"]) or market.price(t["symbol"])
-        total += t["qty"] * p * (1 - config.FEE_PCT / 100)
+        total += value(t, p)
     return total
 
 
@@ -87,30 +104,40 @@ def can_open(con):
 
 
 def buy(con, cand, decision):
-    """Size the trade from cash and the stop, with fees and slippage. Returns the trade row or None."""
-    price = cand["price"] * (1 + config.SLIPPAGE_PCT / 100)
+    """Open a position (long or short) sized so the stop-loss costs at most RISK_PCT of the account,
+    with at most LEVERAGE times the margin. Fees and slippage included. Returns (row, why_not)."""
+    side = decision.get("side", "long") if config.MODE == "gold" else "long"
+    slip = config.SLIPPAGE_PCT / 100
+    price = cand["price"] * (1 + slip if side == "long" else 1 - slip)
     stop_atr = min(2.5, max(1.0, float(decision.get("stop_atr", 1.5))))
     target_r = min(3.0, max(1.5, float(decision.get("target_r", 2))))
-    stop = price - stop_atr * cand["atr"]
-    stop_pct = (price - stop) / price * 100
-    if stop <= 0 or stop_pct > config.MAX_STOP_PCT:
-        return None, f"stop would be {stop_pct:.1f}% away (limit {config.MAX_STOP_PCT}%)"
-    target = price + target_r * (price - stop)
+    dist = stop_atr * cand["atr"]
+    stop, target = (price - dist, price + target_r * dist) if side == "long" else (price + dist, price - target_r * dist)
+    stop_pct = dist / price * 100
+    if stop <= 0 or target <= 0 or stop_pct > config.MAX_STOP_PCT:
+        return None, f"stop would be {stop_pct:.2f}% away (limit {config.MAX_STOP_PCT}%)"
     cash = get(con, "cash", 0)
-    spend = cash * 0.98 / max(1, config.MAX_OPEN - len(open_trades(con)))   # keep a little for rounding
-    if spend < config.MIN_ORDER_USDT:
-        return None, "order would be below the exchange minimum"
-    qty = spend * (1 - config.FEE_PCT / 100) / price
-    cur = con.execute("INSERT INTO trades(symbol,opened,entry,qty,cost,stop,target,confidence,reason) VALUES(?,?,?,?,?,?,?,?,?)",
-                      (cand["symbol"], time.time(), price, qty, spend, stop, target,
-                       float(decision.get("confidence", 0)), decision.get("reason", "")))
-    put(con, "cash", cash - spend)
+    margin = cash * 0.98 / max(1, config.MAX_OPEN - len(open_trades(con)))   # keep a little for rounding
+    if margin < config.MIN_ORDER_USDT:
+        return None, "account below the minimum order size"
+    risk_cap = equity(con) * config.RISK_PCT / 100 / (stop_pct / 100)       # notional where the stop costs RISK_PCT
+    notional = min(margin * config.LEVERAGE, risk_cap)
+    qty = notional / price
+    margin -= notional * config.FEE_PCT / 100                                # opening fee
+    cur = con.execute("INSERT INTO trades(symbol,opened,entry,qty,cost,stop,target,confidence,reason,side,notional) "
+                      "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                      (cand["symbol"], time.time(), price, qty, margin, stop, target,
+                       float(decision.get("confidence", 0)), decision.get("reason", ""), side, notional))
+    put(con, "cash", cash - margin - notional * config.FEE_PCT / 100)
     return con.execute("SELECT * FROM trades WHERE id=?", (cur.lastrowid,)).fetchone(), ""
 
 
 def sell(con, t, price, why):
-    px = price * (1 - config.SLIPPAGE_PCT / 100)
-    proceeds = t["qty"] * px * (1 - config.FEE_PCT / 100)
+    slip = config.SLIPPAGE_PCT / 100
+    px = price * (1 - slip if (t["side"] or "long") == "long" else 1 + slip)
+    proceeds = value(t, px)
+    if proceeds == 0:
+        why += " (account wiped out)"
     con.execute("UPDATE trades SET closed=?, exit=?, proceeds=?, pnl=?, exit_reason=? WHERE id=?",
                 (time.time(), px, proceeds, proceeds - t["cost"], why, t["id"]))
     put(con, "cash", get(con, "cash", 0) + proceeds)
@@ -121,14 +148,15 @@ def check_exits(con):
     """Walk the 15-minute candles since the trade opened. If one candle touched both, assume the stop (worst case)."""
     closed = []
     for t in open_trades(con):
+        long = (t["side"] or "long") == "long"
         candles = market.candles(t["symbol"], "15m", 1000, start_ms=t["opened"] * 1000)
         hit = None
         for c in candles:
             if c["t"] < t["opened"] * 1000:
                 continue                     # this candle started before we bought
-            if c["l"] <= t["stop"]:
+            if (c["l"] <= t["stop"]) if long else (c["h"] >= t["stop"]):
                 hit = (t["stop"], "stop-loss"); break
-            if c["h"] >= t["target"]:
+            if (c["h"] >= t["target"]) if long else (c["l"] <= t["target"]):
                 hit = (t["target"], "target"); break
         if not hit and (time.time() - t["opened"]) / 3600 >= config.MAX_HOLD_HOURS:
             hit = (market.price(t["symbol"]), f"time limit ({config.MAX_HOLD_HOURS:.0f} h)")

@@ -3,7 +3,14 @@
 AI ki madad se crypto **paper trading**: nakli paise, asli Binance prices. Koi exchange account, API key ya asli order nahi.
 Maqsad ye dekhna hai ke AI ke faisle waqai munafa dete hain ya nahi, asli paisa lagane se **pehle**.
 
-## Kaise kaam karta hai
+## Do modes
+
+- `MODE=crypto`: spot, sirf khareed (long), top 25 coins, leverage nahi.
+- `MODE=gold` (server par yahi chal raha hai): sone ki qeemat (PAXG), long ya short, **20x leverage**, Rs 2000 ka account,
+  har trade stop-loss par account ka zyada se zyada ~20% khatre mein, 1-ghante ki candles, hafte ke aakhir (Sat/Sun) nayi trade nahi.
+  Leverage ka matlab: sona 1% hile to account ~20% hilta hai, dono taraf.
+
+## Kaise kaam karta hai (crypto mode)
 
 1. **Har ghante** bot khuli trade ka stop-loss aur target check karta hai (15-minute candles, dono ek candle mein lagein to nuqsaan wala maana jata hai).
 2. **Har 4 ghante** (agar koi trade khuli nahi) wo Binance ke 25 sab se zyada trade hone wale coins dekhta hai, 4-ghante ki candles par:

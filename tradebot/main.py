@@ -31,7 +31,15 @@ def run(con):
         log.info("AI asked %.1f h ago, waiting", (time.time() - last_ai) / 3600)
         return
 
-    btc, risk_off = strategy.market_regime()
+    if config.MODE == "gold":
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        if not config.TRADE_WEEKENDS and datetime.now(ZoneInfo(config.TIMEZONE)).weekday() >= 5:
+            log.info("weekend: gold futures closed, no new trades")
+            return
+        btc, risk_off = None, False
+    else:
+        btc, risk_off = strategy.market_regime()
     if risk_off:
         paper.put(con, "last_ai", time.time())
         paper.log_decision(con, {"market_view": "Bitcoin is in a downtrend (below its 50 EMA, RSI under 40).",
@@ -39,7 +47,7 @@ def run(con):
         log.info("risk-off: BTC weak, no trades")
         return
     held = {t["symbol"] for t in paper.open_trades(con)}
-    cands = strategy.shortlist(exclude=held)
+    cands = strategy.gold_candidate() if config.MODE == "gold" else strategy.shortlist(exclude=held)
     paper.put(con, "last_ai", time.time())
     if not cands:
         paper.log_decision(con, {"market_view": "No coin passed the trend and risk filters.",
@@ -47,8 +55,9 @@ def run(con):
         log.info("empty shortlist")
         return
     eq = paper.equity(con)
-    account = dict(equity_usdt=round(eq, 2), equity_pkr=round(eq * market.usd_pkr()),
-                   open_positions=len(held), max_positions=config.MAX_OPEN)
+    account = dict(equity_usd=round(eq, 2), equity_pkr=round(eq * market.usd_pkr()),
+                   open_positions=len(held), max_positions=config.MAX_OPEN, leverage=config.LEVERAGE,
+                   risk_per_trade_pct=config.RISK_PCT)
     try:
         d = ai.decide(cands, btc, account)
     except Exception as e:
@@ -58,7 +67,7 @@ def run(con):
     d["shortlist"] = [c["symbol"] for c in cands]
     t = d.get("trade")
     if t:
-        cand = next(c for c in cands if c["symbol"] == t["symbol"])
+        cand = cands[0] if config.MODE == "gold" else next(c for c in cands if c["symbol"] == t["symbol"])
         row, why = paper.buy(con, cand, t)
         if row:
             log.info("bought %s at %.6g", row["symbol"], row["entry"])
