@@ -22,6 +22,7 @@ MODE = _env("MODE", "crypto")
 GOLD_SYMBOL = _env("GOLD_SYMBOL", "PAXGUSDT")      # PAXG tracks the price of one troy ounce of gold
 LEVERAGE = _num("LEVERAGE", 1)                     # 20 = a 1% move changes the position by 20%
 RISK_PCT = _num("RISK_PCT", 100)                   # max loss per trade as % of the account (at the stop-loss)
+MARGIN_PKR = _num("MARGIN_PKR", 0)                 # fixed margin per trade in rupees (0 = split the cash over MAX_OPEN)
 TRADE_WEEKENDS = _env("TRADE_WEEKENDS", "1") == "1"  # gold futures (PMEX) are closed on weekends
 
 # Paper account

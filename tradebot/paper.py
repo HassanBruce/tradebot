@@ -117,7 +117,13 @@ def buy(con, cand, decision):
     if stop <= 0 or target <= 0 or stop_pct > config.MAX_STOP_PCT:
         return None, f"stop would be {stop_pct:.2f}% away (limit {config.MAX_STOP_PCT}%)"
     cash = get(con, "cash", 0)
-    margin = cash * 0.98 / max(1, config.MAX_OPEN - len(open_trades(con)))   # keep a little for rounding
+    opposite = [t for t in open_trades(con) if t["symbol"] == cand["symbol"] and (t["side"] or "long") != side]
+    if opposite:
+        return None, f"a {opposite[0]['side']} trade on the same market is still open"
+    if config.MARGIN_PKR > 0:
+        margin = min(cash * 0.98, config.MARGIN_PKR / market.usd_pkr())
+    else:
+        margin = cash * 0.98 / max(1, config.MAX_OPEN - len(open_trades(con)))   # keep a little for rounding
     if margin < config.MIN_ORDER_USDT:
         return None, "account below the minimum order size"
     risk_cap = equity(con) * config.RISK_PCT / 100 / (stop_pct / 100)       # notional where the stop costs RISK_PCT

@@ -56,12 +56,14 @@ def run(con):
         return
     eq = paper.equity(con)
     account = dict(equity_usd=round(eq, 2), equity_pkr=round(eq * market.usd_pkr()),
-                   open_positions=len(held), max_positions=config.MAX_OPEN, leverage=config.LEVERAGE,
-                   risk_per_trade_pct=config.RISK_PCT)
+                   open_positions=[dict(side=t["side"], entry=round(t["entry"], 2), stop=round(t["stop"], 2),
+                                        target=round(t["target"], 2)) for t in paper.open_trades(con)],
+                   max_positions=config.MAX_OPEN, leverage=config.LEVERAGE)
     try:
         d = ai.decide(cands, btc, account)
     except Exception as e:
         log.warning("AI failed: %s", e)
+        paper.put(con, "last_ai", last_ai)          # try again at the next hourly run instead of waiting hours
         paper.log_decision(con, {"market_view": "", "why_not": f"AI unavailable: {str(e)[:150]}"})
         return
     d["shortlist"] = [c["symbol"] for c in cands]

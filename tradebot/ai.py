@@ -23,7 +23,7 @@ def ask_json(prompt):
                 last = e
             except Exception as e:
                 last = e
-                if any(x in str(e) for x in ("429", "RESOURCE_EXHAUSTED", "404", "imeout", "504", "DEADLINE")):
+                if any(x in str(e) for x in ("429", "RESOURCE_EXHAUSTED", "404", "imeout", "503", "UNAVAILABLE", "504", "DEADLINE")):
                     break
                 time.sleep(10 * (attempt + 1))
     raise RuntimeError(f"Gemini failed: {str(last)[:200]}")
@@ -63,8 +63,8 @@ Return JSON:
 
 def decide_gold(g, account):
     prompt = f"""You are a disciplined gold day trader. The account trades gold futures-style with {config.LEVERAGE:.0f}x leverage,
-long or short, one position at a time. Each trade risks about {config.RISK_PCT:.0f}% of the account at the stop-loss,
-so only take setups with a clear edge. Choosing NO trade is often right.
+long or short. Each trade uses a small fixed margin, so several trades can be open; never open the opposite side
+of a position that is still open. Only take setups with a clear edge. Choosing NO trade is often right.
 
 Account: {json.dumps(account)}
 Gold ({config.INTERVAL} candles, price in USD per ounce, via PAXG): {json.dumps(g)}
