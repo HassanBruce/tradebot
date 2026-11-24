@@ -19,6 +19,7 @@ TIMEZONE = _env("TIMEZONE", "Asia/Karachi")
 
 # What to trade: "crypto" (spot, long only, top coins) or "gold" (PAXG price, futures-style: long or short, leverage)
 MODE = _env("MODE", "crypto")
+LABEL = _env("LABEL", "Gold bot" if MODE == "gold" else "Crypto bot")   # name in email subjects
 GOLD_SYMBOL = _env("GOLD_SYMBOL", "PAXGUSDT")      # PAXG tracks the price of one troy ounce of gold
 LEVERAGE = _num("LEVERAGE", 1)                     # 20 = a 1% move changes the position by 20%
 RISK_PCT = _num("RISK_PCT", 100)                   # max loss per trade as % of the account (at the stop-loss)

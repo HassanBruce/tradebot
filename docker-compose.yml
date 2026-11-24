@@ -1,6 +1,7 @@
 # Runs once and exits. The server's cron starts it:
-#   every hour:   docker compose run --rm tradebot run
-#   every morning: docker compose run --rm tradebot report
+#   every hour:    docker compose run --rm tradebot run      (gold, .env)
+#                  docker compose run --rm crypto run        (crypto, .env.crypto)
+#   every morning: docker compose run --rm tradebot report / crypto report
 name: tradebot
 services:
   tradebot:
@@ -8,5 +9,12 @@ services:
     env_file: .env
     environment:
       DATA_DIR: /app/data
+    volumes:
+      - ./data:/app/data
+  crypto:
+    build: .
+    env_file: .env.crypto
+    environment:
+      DATA_DIR: /app/data/crypto
     volumes:
       - ./data:/app/data

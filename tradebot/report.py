@@ -16,7 +16,7 @@ def send(subject, body):
     if not (config.SMTP_USER and config.SMTP_PASSWORD and config.REPORT_TO):
         return False
     m = EmailMessage()
-    m["Subject"], m["From"], m["To"] = subject, f"Trade Bot <{config.SMTP_USER}>", ", ".join(config.REPORT_TO)
+    m["Subject"], m["From"], m["To"] = subject, f"{config.LABEL} <{config.SMTP_USER}>", ", ".join(config.REPORT_TO)
     m.set_content("Open this email in HTML view.")
     m.add_alternative(f'<div style="font-family:Arial,sans-serif;max-width:720px;color:#111;font-size:14px">{body}'
                       '<p style="font-size:11px;color:#888;margin-top:24px">PAPER TRADING: nakli paise, asli prices. '
@@ -48,7 +48,7 @@ def alert_open(t):
     loss_at_stop = t["qty"] * abs(t["entry"] - t["stop"])
     gain_at_target = t["qty"] * abs(t["target"] - t["entry"])
     word = "KHAREEDA (long, upar jaane par munafa)" if side == "long" else "BECHA (short, neeche jaane par munafa)"
-    send(f"Paper {'BUY' if side == 'long' else 'SELL'} {_name(t['symbol'])} · stop par −{rs(loss_at_stop)}, target par +{rs(gain_at_target)}",
+    send(f"{config.LABEL}: Paper {'BUY' if side == 'long' else 'SELL'} {_name(t['symbol'])} · stop par −{rs(loss_at_stop)}, target par +{rs(gain_at_target)}",
          f"<h2 style='margin:0 0 8px'>{_name(t['symbol'])}: {word}</h2>"
          f"<p>Price {t['entry']:.6g} USD · margin {rs(t['cost'])} · leverage {lev:.1f}x<br>"
          f"Stop-loss {t['stop']:.6g} ({pct_stop:.2f}% door): nuqsaan ~{rs(loss_at_stop)}<br>"
@@ -59,7 +59,7 @@ def alert_open(t):
 def alert_close(t):
     pct = t["pnl"] / t["cost"] * 100
     word = "MUNAFA" if t["pnl"] >= 0 else "NUQSAAN"
-    send(f"Trade band {_name(t['symbol'])}: {word} {rs(abs(t['pnl']))} ({pct:+.1f}%)",
+    send(f"{config.LABEL}: trade band {_name(t['symbol'])}: {word} {rs(abs(t['pnl']))} ({pct:+.1f}%)",
          f"<h2 style='margin:0 0 8px'>Trade band: {E(_name(t['symbol']))} ({E(t['exit_reason'])})</h2>"
          f"<p>Khareeda {t['entry']:.6g} → becha {t['exit']:.6g} USDT<br>"
          f"Nateeja: <b style='color:{'#067647' if t['pnl'] >= 0 else '#b42318'}'>{word} {rs(abs(t['pnl']))} ({pct:+.1f}%)</b>, fees ke baad.</p>")
@@ -81,7 +81,7 @@ def daily(con):
     import json
     last = json.loads(last[0]) if last else {}
     color = "#067647" if eq >= start["usdt"] else "#b42318"
-    h = [f"<h2 style='margin:0 0 6px'>Trade bot · din {days}</h2>",
+    h = [f"<h2 style='margin:0 0 6px'>{E(config.LABEL)} · din {days}</h2>",
          f"<p style='font-size:22px;margin:4px 0'><b style='color:{color}'>Rs {eq * rate:,.0f}</b> "
          f"<span style='font-size:14px;color:#555'>(shuru Rs {start['pkr']:,.0f} · {(eq / start['usdt'] - 1) * 100:+.1f}%)</span></p>",
          f"<p style='color:#555'>Agar sirf {'sona' if bsym == config.GOLD_SYMBOL else 'Bitcoin'} khareed kar rakh lete: Rs {bench * rate:,.0f} ({(bench / start['usdt'] - 1) * 100:+.1f}%). "
@@ -104,4 +104,4 @@ def daily(con):
     if last:
         h.append(f"<h3>AI ki aakhri raaye</h3><p>{E(last.get('market_view'))}</p>"
                  + (f"<p style='color:#555'>{E(last.get('why_not'))}</p>" if last.get("why_not") else ""))
-    send(f"Trade bot: Rs {eq * rate:,.0f} ({(eq / start['usdt'] - 1) * 100:+.1f}%) · din {days}", "".join(h))
+    send(f"{config.LABEL}: Rs {eq * rate:,.0f} ({(eq / start['usdt'] - 1) * 100:+.1f}%) · din {days}", "".join(h))
